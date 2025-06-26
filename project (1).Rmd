@@ -1,0 +1,471 @@
+---
+title: "What Factors Drive Personal Income?"
+subtitle: "An Analysis of How Factors such as Education, Race, Age, and more Relate to Personal Income"
+author: "Jake Hansen, Landon Chun, Peilin Liu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r setup, include = FALSE}
+#load packages, read in your dataset if external to a package, 
+#and set global options. I have set all code chunks to not echo,
+#and to not print messages or warnings.  If you want to echo a particular code chunk to highlight something, you can do this individually for that code chunk.
+
+
+library(tidyverse)        #umbrella package
+library(janitor) 
+library(patchwork)
+library(GGally)
+library(skimr)
+library(rsample)
+library(ggplot2)
+library(tidymodels)
+library(ggridges)
+knitr::opts_chunk$set( echo = FALSE,    
+                       message = FALSE,
+                       warning = FALSE)
+
+
+gss_subset <- read_csv(file = "sub-data.txt",
+                       na = c(".d", ".i", ".j",".m",".n",".p",".q",".r",".s",".u",".x",".y",".z"))
+
+```
+
+
+
+## Introduction
+
+<!--- Delete the following text and write your introduction in its place  --->
+
+Income is extremely important for everyone and determines the type of lifestyle and habits we have. We chose our specific 
+variables because we believe they will help to discover different factors and their varying impacts on wealth inequality in
+the modern world. We want to understand how things such as location, race, age, and level of degree are related to do with 
+determining the level of income made by individuals. We believe this will speak towards discrepancies found in personal 
+income and what types of things are more important in determining how much money one earns. Looking at outside sources, 
+research suggests that younger individuals and their incomes are hit harder by inflation compared to older individuals. As 
+far as location, individuals who live in high-cost-of-living areas are even hit harder due to a lower purchasing power in 
+relation to their income, adjusted for inflation. We predict that individuals  with higher levels of education and those 
+living in larger urban areas will tend to report higher incomes. We also anticipate that income may differ by race and 
+employment type, though the strength and direction of those relationships remain to be explored.
+
+The data was collected by the General Social Survey (GSS). The GSS collects data through in-person interviews with a 
+nationally representative sample of adults living in the United States. The individuals in the dataset are U.S. residents 
+from diverse backgrounds who responded to survey questions about their demographics, personal finances, and more. We are 
+using conrinc — a continuous numerical variable that reflects each respondent’s personal income after adjusting for 
+inflation — as our explanatory variable. Because income is highly skewed to the right, we applied a log10 transformation to
+normalize its distribution. The transformed variable, log_conrinc, is more suitable for linear modeling, as it reduces 
+outliers.
+
+Codebook:
+
+| Header          |  Description
+|:----------------|:--------------------------------
+| location      | Categorical variable that can take on values from 1-5 where each number represents different location types such as large city, suburb of a large city, small city, unincorporated area of a large city, and incorporated area with less than 2500 people.
+| age           | Numerical variable that measures the age of the respondent that can take on values of 18-89, where are all ages above 89 will be recorded with 89.
+| race         | Categorical variable that can take on the values 1-3. Each number corresponds to a different race (white (1), black (2), or other (3))
+| ethnic        | Categorical variable that has possible values from 1-999. The numbers correspond to a country which the respondents ancestors came from.
+| degree        | Categorical variable with values 0-4 that represent the highest level of education the respondent has completed. Examples include less than high school, high school, bachelor's degree, graduate, associate/junior college. 
+| prestige      | Numerical variable ranging from 12-82 that represent the perceived occupational prestige of the respondent.Higher values represent higher levels of prestige.
+| wrkslf        | Categorical variable with possible 2 possible values based on the type of employment. 1 represents a self-employed respondent and 2 shows that they are not self-employed.
+| income        | Numerical variable that can have values from 1-12 that measures the total family income from the previous year before taxes. Each number represents a range of income.
+| rincome      | Numerical variable that takes on values from 1-12 based on the amount of income the respondent made during the previous year before taxes and deductions. Each number represents a range of income.
+| conrinc       | A numerical variable that ranges from 336-432,612 based on the respondents personal income after being adjusted for inflation. This will be our explanatory variable.
+
+
+
+
+
+## Section 2 - Model building
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r landon_code}
+gss_subset <- gss_subset %>% 
+  filter(!is.na(conrinc), !is.na(degree), !is.na(prestige),!is.na(location),!is.na(age),!is.na(race),!is.na(ethnic),!is.na(wrkslf),!is.na(income),!is.na(rincome))
+gss_subset <- gss_subset %>% 
+  mutate(log_conrinc = log(conrinc))
+gss_subset <- gss_subset %>% 
+  mutate(log_prestige = log(prestige))
+gss_subset <- gss_subset %>% 
+  mutate(Education = ifelse(degree == 0, "Less than High School",
+                           ifelse(degree == 1, "High School",
+                           ifelse(degree == 2, "Associate/Junior College",
+                           ifelse(degree == 3, "Bachelor's",
+                           ifelse(degree == 4, "Graduate", NA))))))
+gss_subset <- gss_subset %>% 
+  mutate(Higher_Education = ifelse(degree == 0, 0,
+                           ifelse(degree == 1, 0,
+                           ifelse(degree == 2, 1,
+                           ifelse(degree == 3, 1,
+                           ifelse(degree == 4, 1, NA))))))
+
+gss_subset <- gss_subset %>%   
+mutate(Higher_Education2 = ifelse(degree == 0, "No Higher Education",
+                           ifelse(degree == 1, "No Higher Education",
+                           ifelse(degree == 2, "Higher Education",
+                           ifelse(degree == 3, "Higher Education",
+                           ifelse(degree == 4, "Higher Education", NA))))))
+set.seed(1000)
+
+gss_split <- initial_split(gss_subset, prop = 0.8)
+
+gss_train <- training(gss_split)
+gss_train <-gss_train %>% 
+  filter(!is.na(conrinc), !is.na(degree), !is.na(prestige),!is.na(location),!is.na(age),!is.na(race),!is.na(ethnic),!is.na(wrkslf),!is.na(income),!is.na(rincome))
+gss_test <- testing(gss_split)
+gss_test <- gss_test %>% 
+  filter(!is.na(conrinc), !is.na(degree), !is.na(prestige),!is.na(location),!is.na(age),!is.na(race),!is.na(ethnic),!is.na(wrkslf),!is.na(income),!is.na(rincome))
+
+glimpse(gss_subset)
+
+```
+
+Our group will be proposing three different models for our dataset evaluation since we have three group members. To begin evaluating the data, we have split our data into a test and training group, with the test group comprising 80% of the data and the training group having 20%. 
+
+We will be using the training data to propose our models and make plots that allow us to explain why we are proposing our models and how we think different explanatory variables relate to our response variable. The test data will be used to validate the models we have created and show if they effectively explain the relationships in our data. To ensure our models will be as accurate as possible, we will be using the same seed number so our data is identical.   
+
+The response variable we will analyze is "conrinc", which represents the inflation-adjusted income of the respondents in the GSS survey. The "conrinc" variable has a skewed distribution, so we have transformed it into "log_conrinc" since it produces a more normal distribution. On top of this, we have mutated the variables "Higher_Education", "Higher_Education2", and "Education" from the "degree" variable in our dataset to make our plots and models easier to understand and interpret.   
+To start our evaluations, we will show a histogram that displays "log_conrinc" along with the number of observations and helpful statistics such as mean, median, Q1, and Q3. This allows us to see the range of "log_conrinc" and where our data peaks (around 10).  
+
+```{r}
+ggplot(data = gss_train,
+       mapping = aes(x = log_conrinc))+
+         geom_histogram(binwidth =0.5)
+```
+
+```{r}
+gss_train %>% 
+  summarise(mean_income = mean(log_conrinc), median_income = median(log_conrinc), Q1 = quantile(log_conrinc, 0.25), Q3 = quantile(log_conrinc, 0.75)) %>% 
+  arrange(desc(mean_income))
+```
+
+First, we will make a 95% bootstrap interval using the variables "log_conrinc" and "Higher_Education2" to determine if the education of a person has a significant effect on their inflation-adjusted income. The difference in means that we found has a lower limit of 0.529 and an upper limit of 0.618. The value 0 is not present in this bootstrap interval, which means that higher education (college or above) might be associated with higher amounts of inflation-adjusted income.
+
+```{r}
+boot_diff_means.df <- gss_train %>% 
+                  specify(response = log_conrinc, 
+                          explanatory = Higher_Education2 ) %>%
+                  generate(reps = 1000, 
+                           type = "bootstrap") %>%
+                  calculate(stat = "diff in means",
+                            order = c("Higher Education", "No Higher Education"))
+boot_diff_means.df %>% 
+  summarise(lower = quantile(stat, 0.025),
+                             upper = quantile(stat, 0.975))
+```
+
+Since it's been shown that there may be a relationship between education level and income, we have constructed a box plot to show this relationship. Along with the plot, the mean, median, quartile 1, and quartile 3 incomes are displayed and sorted by level of education. This type of plot if very helpful for visualizing and comparing categorical data and identifying outliers. 
+
+The data displayed supports the bootstrap interval, as it is clear that higher levels of education tend to lead to increased amounts of income. The mean income is sorted perfectly from graduate degree down to less than high school, which shows how each additional level of education in our data averages slightly more income than the last. Another interesting thing we can see in the boxplot is that all education types have many low outliers, but the Bachelor's degree is the only education level with a group of outliers earning significantly more than expected.
+
+```{r}
+ggplot(data = gss_train,
+       mapping = aes(x = log_conrinc, y = Education, fill = Education))+
+         geom_boxplot()+
+  labs(title = "Inflation Adjusted Income vs Education Level")
+```
+
+```{r}
+gss_train %>% group_by(Education) %>% 
+  summarise(mean_income = mean(log_conrinc), median_income = median(log_conrinc), Q1 = quantile(log_conrinc, 0.25), Q3 = quantile(log_conrinc, 0.75), ) %>% 
+  arrange(desc(mean_income))
+```
+
+In order to visualize the numerical explanatory variable "prestige" and its relationship to "log_conrinc", we will be using a scatterplot. Before looking at the graph and statistics, I would assume that there will be a positive correlation between these variables since more prestigious jobs are normally much more difficult to get and tend to pay more for this reason.
+
+As expected, the plot has an R value of 0.33, which shows a weak to moderate positive relationship between inflation-adjusted income and prestige. The mean and median income displayed for each prestige value shows that lower prestiges, such as 74, can have an average higher income (11.44) than higher prestiges like 82, which has a mean income value of 11.06. Despite this occasionally happening in our data, the income value still tends to increase as prestige does.
+
+
+```{r}
+ggplot(data = gss_train,
+       mapping = aes(y = log_conrinc, x = prestige))+
+         geom_point(color = "darkgreen", size = 0.7)+
+  geom_smooth(method = "lm", color = "blue")
+```
+
+```{r}
+gss_train %>% group_by(prestige) %>% 
+  summarise( mean_income = mean(log_conrinc), median_income = median(log_conrinc), Q1 = quantile(log_conrinc, 0.25), Q3 = quantile(log_conrinc, 0.75),sd_income = sd(log_conrinc)) %>% 
+  arrange(desc(prestige))
+```
+
+```{r}
+  gss_train %>% 
+summarise(R = cor(log_conrinc, prestige))
+```
+
+
+```{r support_model_1_jake}
+
+support_model <- gss_train %>%
+  select(log_conrinc, age) %>%
+  filter(!is.na(log_conrinc), !is.na(age))
+
+clean_support_model <- log10(support_model)
+
+support_model_3 <- lm(log_conrinc ~ age, data = clean_support_model)
+
+summary(support_model_3)
+
+
+ggplot(clean_support_model,
+       aes(x = age, y = log_conrinc)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = T, color = "skyblue") + 
+  labs(title = "Relationship between Age and Log Household Income",
+       x = "Age (years)",
+       y = "log (conrinc)",
+       )
+
+
+```
+
+
+In this simple regression model, I explored how a respondent’s income (conrinc) is related to their age. Since income tends to be highly skewed, I applied a log10 transformation to conrinc, which helps normalize the 
+distribution.
+
+I fit a simple linear regression model using log-transformed income as the response and age as the explanatory variable. The slope of the model was approximately 0.062, indicating that for each one-year increase in 
+age, the predicted log10 income increases by about 0.062 units. This suggests a slight upward trend in income as people get older.
+
+The adjusted R-squared value of 0.034 means that age explains only about 3.4% of the variability in income. While this relationship is statistically significant (p < 0.001), the small R² value indicates that age 
+alone is not a strong predictor of income. This is visually confirmed in the scatterplot: while the line slopes upward, there is a wide vertical spread of data at every age, and the stacked horizontal rows indicate 
+rounded or bracketed income reporting.
+
+This model provides a basic look at how income increases with age but also shows the limitations of using a single variable to explain such a complex outcome.
+
+The regression equation is:
+
+Log10(conrinc) = 0.894 + 0.00170 * {age}
+
+This suggests that for every additional year of age, a respondent’s log-transformed income increases by approximately 0.0017 units. On the original income scale, this equates to roughly a 0.4% increase per year. The 
+positive slope is statistically significant (p < 0.001), as shown by the narrow confidence band around the regression line in the graph.
+
+
+
+
+
+```{r support_model_2_jake}
+
+support_model_2 <- gss_train %>%
+  select(log_conrinc, wrkslf) %>%
+  filter(!is.na(log_conrinc), !is.na(wrkslf))
+
+clean_support_model_2 <- log10(support_model_2)
+
+model_wrkslf <- lm(log_conrinc ~ wrkslf, data = support_model_2)
+
+summary(model_wrkslf)
+
+
+ggplot(clean_support_model_2, aes(y = factor(wrkslf), x = log_conrinc)) +
+  geom_boxplot(fill = "Skyblue") +
+  labs(
+    title = "Comparison of Log Household Income by Employment Type",
+    x = "Employment Type (1 = Employed, 2 = Self-Employed)",
+    y = "log(conrinc)"
+  )
+
+```
+In this model, I examined whether income differs between people who are employed and those who are self-employed. The response variable, conrinc, was log10-transformed to reduce skew. The explanatory variable wrkslf 
+is coded numerically as 1 (employed) or 2 (self-employed), making it suitable for a simple linear regression.
+
+The coefficient for wrkslf was 0.14789, which means that self-employed respondents earn about 10^{0.14789} ≈ 1.41 times the income of employed respondents—or roughly 41% more. The p-value is highly significant (p < 
+0.001), indicating strong evidence that income differs between the two groups.
+
+This finding is visually supported by the boxplot above. The median log income for self-employed individuals is slightly higher, and while both groups share similar spreads and ranges, the difference in central 
+tendency aligns with the regression result. There are many outliers on the lower end for both groups, likely due to income reporting brackets.
+
+However, the adjusted R-squared value is only 0.0026, meaning employment status explains just 0.26% of the variation in income. This suggests that while there is a noticeable difference between groups, many other 
+factors contribute more to income variation and are not captured by this single-variable model.
+
+
+### Section 2.1 
+
+### Model proposed by Jake
+
+```{r model_jake}
+
+model_Jake <- gss_subset %>%
+  select(log_conrinc, age, wrkslf) %>%
+  filter(!is.na(log_conrinc), !is.na(age), !is.na(wrkslf))
+
+
+ggplot(model_Jake, aes(x = age, y = log_conrinc, color = wrkslf)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Income vs. Age by Work Sector",
+    y = "Respondent Income",
+    x = "Age",
+    color = "Work Sector"
+  )
+
+model_Jake_final <- lm(log_conrinc ~ age + wrkslf, data = model_Jake)
+
+summary(model_Jake_final)
+
+```
+For my final model, I examined how respondent income (conrinc) is influenced by age and work classification (wrkslf). I chose age as a numeric explanatory variable, given that income typically increases with age and experience. The wrkslf variable represents the sector in which respondents are employed, which often carries implications for income.
+
+I filtered the data to remove any observations with missing values in conrinc, age, or wrkslf. A scatterplot of income versus age, colored by work sector, shows that income generally rises with age, though different work sectors show varying income levels and spread.
+
+The multiple regression model lm(conrinc ~ age + wrkslf) quantifies these effects. The coefficient for age tells us the average change in income with each additional year, controlling for work sector. The work sector coefficients compare average incomes across employment types, revealing how institutional structure may influence earnings. This model deepens our understanding of income variation by connecting both demographic and occupational characteristics.
+
+
+```{r jake_adj3, echo = FALSE}
+
+model_Jake <- lm(log_conrinc ~ age + wrkslf, data = gss_train)
+model_3rsq <- glance(model_Jake) %>% 
+                       select(adj.r.squared) 
+model_3rsq
+
+
+```
+The adjusted R-squared value of 0.0211 indicates that the model explains about 2.11% of the variability in the log of respondent income (log_conrinc). This is a very low proportion, suggesting that age and work sector (wrkslf) do not explain much of the variation in income across respondents in this dataset. This result implies that while there may be some relationship, it is relatively weak — and most of the variation in income is likely due to other factors.
+
+
+```{r jake_rmse3, echo = FALSE}
+model_Jake_pred <-  augment(model_Jake, newdata = gss_test)
+model_Jake.rmse <- model_Jake_pred %>% 
+                 rmse(truth = log_conrinc, estimate = .fitted) %>% pull()
+model_Jake.rmse
+
+```
+
+The RMSE (Root Mean Squared Error) of 1.03 means that, on average, the model’s predictions for log-transformed income (log_conrinc) are off by about 1.03 units. Since the income variable is in base-10 logarithmic scale, this corresponds to a factor of approximately 10^1.03 ≈ 10.7 on the original income scale. In practical terms, the predicted income values could differ from actual income values by a factor of nearly 10 times, which indicates that the model’s predictions are not very precise. This suggests that age alone is not sufficient to accurately predict income and that other variables likely play a more significant role in explaining variation in income.
+
+
+
+
+```{r equation_model_3}
+model_Jake_final <- lm(log_conrinc ~ age + wrkslf, data = gss_subset)
+tidy(model_Jake_final)
+
+```
+
+
+In this model, I analyzed how respondent income (log-transformed) is influenced by both age and work classification (wrkslf). The variable age is numeric, representing years of age, and wrkslf is a categorical variable indicating the type of work sector the respondent is employed in (e.g., private, government, or self-employed).
+
+The regression output shows that:
+- The coefficient for age is 0.0111, which means that, holding work classification constant, every one-year increase in age is associated with a 1.11% increase in predicted income, since the response variable is on a log10 scale.
+- The coefficient for wrkslf is -0.0851, which suggests that the category coded as 1 for wrkslf (likely a specific sector such as self-employed or private) earns about 17.6% less income than the reference group, as 10^{-0.0851} ≈ 0.824, when age is held constant.
+
+Both predictors are statistically significant: the p-value for age is effectively zero, and the p-value for wrkslf is approximately 0.006, indicating strong evidence that these variables are associated with income variation.
+
+This model improves our understanding of income patterns by showing that both demographic factors (age) and employment sectors (wrkslf) contribute to income differences among respondents.
+
+
+### Model Proposed by Peilin
+
+```{r}
+model_full <- lm(
+  log_conrinc ~ age + log_prestige + Education + location + wrkslf,
+  data = gss_train
+)
+```
+
+
+### Model Proposed by Landon
+
+```{r model_Landon}
+model_Landon_final <- lm(log_conrinc ~ prestige + Higher_Education, data = gss_subset)
+tidy(model_Landon_final)
+
+
+```
+This model will assess how the numerical variable "prestige" and the categorical variable "Higher_Education" can be used to predict the income a person earns. When “Higher_Education” is 1, it means that the individual attended some type of college; 0 means they did not attend college.  The 95% bootstrap interval analyzing the inflation-adjusted income differences between education levels did not include 0, which shows that education significantly affects income. There are many possible reasons for this difference in earnings, such as specialized jobs, a higher demand for educated individuals, or opportunities gained through college. I chose to use prestige as my other explanatory variable because I thought that jobs held in higher regard by society would also earn more. This is because there is always demand for things held in high esteem, and price tends to increase with demand. To determine if there is a relationship between these variables, I made a scatterplot of "log_conrinc" (income) against "prestige". The graph had an upward slope and a correlation coefficient of 0.33, which shows that these variables have a positive correlation. This relationship is expected because, as I explained earlier, prestigious jobs are sought after and competitive, which typically means a higher income.  
+
+
+```{r Landon_rmse_adj, echo = FALSE}
+model_Landon <- lm(log_conrinc ~ prestige + Higher_Education, data = gss_train)
+model_Landonrsq <- glance(model_Landon) %>% 
+                       select(adj.r.squared) 
+model_Landonrsq
+
+model_Landon_pred <-  augment(model_Landon, newdata = gss_test)
+model_Landon.rmse <- model_Landon_pred %>% 
+                 rmse(truth = log_conrinc, estimate = .fitted) %>% pull()
+model_Landon.rmse
+
+
+```
+
+
+
+
+
+| Model                  |  Training (adj) Rsquare| Testing RMSE
+|:-----------------------|:----------------------:| :---------:
+| Model proposed by Jake  |    `r round(100*model_3rsq, 2)`%           | `r round(model_Jake.rmse, 2)`
+| Model proposed by Landon |   `r round(100*model_Landonrsq, 2)`%     | `r round(model_Landon.rmse, 2)`
+
+
+## Section 3 - Results 
+
+
+<!--- Delete the following text and write your individual model building in its place. Create code chunks as you need for your analysis. --->
+
+
+Our group decided to use "model_Landon" for this section because we felt it was the best model for describing our response variable. This is because it had the largest adjusted R-squared percentage among the models, with 11.48%, and the smallest RMSE value of 0.97. The adjusted R-squared value attempts to describe how well the chosen explanatory variables account for the variation in the data. A larger percentage means it explains more of the variation in our response variable, which is why we chose the model with the highest percentage. RMSE calculates the average difference between the outcome and the value predicted by the model. We chose the model with the lowest RMSE since it means that this model predicted values that were closer to the actual data from the respondents. We will now use the same model with the full dataset instead of the test set.
+
+```{r}
+model_Landon_final <- lm(log_conrinc ~ prestige + Higher_Education, data = gss_subset)
+tidy(model_Landon_final)
+```
+
+Equation when Higher_Education = 1: log_conrinc = 9.187 + 0.021 * prestige  
+Education when Higher_Education = 0: log_conrinc = 8.989 + 0.021 * prestige
+
+
+Our group decided to use “model_Landon” for this section because we felt it was the best model for describing our response variable. This is because it had the largest adjusted R-squared percentage, at 11.48%, and the lowest RMSE value of 0.97 among the models we tested.
+
+The adjusted R-squared value of 11.48% indicates that about 11.5% of the variation in log-transformed income (log_conrinc) can be explained by the two predictors in the model: occupational prestige and whether the respondent has higher education. While not a large percentage, this is meaningful in social science research, where many factors influence income is common.
+
+The RMSE (Root Mean Squared Error) of 0.97 means that the predicted values of log_conrinc were, on average, about 0.97 units away from the actual values. Since log-transformed income smooths large income differences, this error is reasonably small, suggesting decent predictive accuracy.
+
+The model equation is:
+
+{log_conrinc} = 8.949 + 0.0029 * {prestige} + 0.238 * {Higher_Education}
+
+- The intercept (8.949) represents the predicted log income for someone with a prestige score of 0 and no 
+higher education (not very meaningful alone but necessary for model structure).
+- The coefficient for prestige (0.0029) means that each one-unit increase in occupational prestige is 
+associated with a 0.29% increase in income (10^{0.0029} ≈ 1.0067, or 0.67% more income per prestige point).
+-	The coefficient for Higher_Education (0.238) means that, holding prestige constant, those with higher 
+education earn about 73% more than those without (10^{0.238} ≈ 1.73).
+
+These findings align with our early predictions that education level and occupational prestige would both 
+be positively associated with income. The statistical significance of both variables (p < 0.001) confirms 
+their strong relationship with the response.
+
+Overall, this model tells a clear and interpretable story: having a higher-prestige job and having a 
+college degree or higher are both significantly associated with higher personal income. Still, the 
+relatively low adjusted R² suggests that many other unmeasured variables—such as industry, location, or 
+hours worked—likely also play a role in determining income.
+
+This model provides a strong foundation for understanding structural income differences and gives us 
+insight into the measurable impacts of education and prestige on economic outcomes.
+
+## Bibliography
+
+A look at inflation’s impact by income and age in the U.S. TD Canada Trust. (n.d.). https://economics.td.com/us-inflation-income-age 
